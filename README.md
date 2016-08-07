@@ -18,6 +18,7 @@ Set the metadatas to the VMs defined in the file **vm_metadata.csv**
 
 ### vm_metadata.csv format
 **Fields**:
+
 - **uuid**       VM UUID
 - **name**       VM name
 - **nic**        VM network interface (nic[0-9])
@@ -32,6 +33,7 @@ Set the metadatas to the VMs defined in the file **vm_metadata.csv**
 - **redirection-target** Redirection Target to be assigned to Nuage vPort
 
 **Example**:
+
 uuid,name,nic,user,enterprise,domain,zone,network,networktype,ip,policy-group,redirection-target
 42250baa-4b98-1532-fccc-9f1ecb66efd4,NuageVM-184-01,nic0,user001,enterprise001,domain001,zone001,subnet001,ipv4,,,
 42250baa-4b98-1532-fccc-9f1ecb66efd4,NuageVM-184-01,nic1,user001,enterprise001,domain001,Zone 31,Subnet 3,ipv4,,,
