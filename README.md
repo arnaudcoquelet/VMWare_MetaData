@@ -14,9 +14,11 @@ Set the metadatas to the VMs defined in the file **vm_metadata.csv**
 
 
 
+
+
 ## Notes
 
-### vm_metadata.csv format
+### vm_metadata.csv
 **Fields**:
 
 - **uuid**       VM UUID
