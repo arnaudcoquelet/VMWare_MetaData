@@ -76,14 +76,18 @@ def loadNuageFromVSC(csvFile):
 
             interface = {}
             if row['nic'] and row['nic'] != '':
-                if row['domainType'] = 'L2':
+                if row['domainType'] == 'L2':
                     interface = { 'l2domain' : row['domain'],
+                              'zone' : '',
+                              'network' : '',
+                              'domain' : '',
                               'networktype' : row['networktype'],
                               'policy-group' : row['policy-group'],
                               'redirection-target' : row['redirection-target']
                               }
                 else:
                     interface = { 'domain' : row['domain'],
+                              'l2domain' : '',
                               'zone' : row['zone'],
                               'network' : row['network'],
                               'networktype' : row['networktype'],
@@ -105,14 +109,18 @@ def loadNuageFromVSC(csvFile):
             #If NIC defined
             interface = {}
             if row['nic'] and row['nic'] != '':
-                if row['domainType'] = 'L2':
+                if row['domainType'] == 'L2':
                     interface = { 'l2domain' : row['domain'],
+                              'zone' : '',
+                              'network' : '',
+                              'domain' : '',
                               'networktype' : row['networktype'],
                               'policy-group' : row['policy-group'],
                               'redirection-target' : row['redirection-target']
                               }
                 else:
                     interface = { 'domain' : row['domain'],
+                              'l2domain': '',
                               'zone' : row['zone'],
                               'network' : row['network'],
                               'networktype' : row['networktype'],
@@ -202,6 +210,7 @@ def main():
 
         try:
             atexit.register(connect.Disconnect, service_instance)
+            taskList = []
 
             #For each VM to process
             for uuid, vmNuageMetaData in VMs.iteritems():
