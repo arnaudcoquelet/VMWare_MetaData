@@ -57,6 +57,14 @@ def getNuageMetaData(extraConfig):
                 vmNicMeta['enterprise'] = enterprise
                 vmNicMeta['user'] = user
 
+
+                if 'l2domain' in vmNicMeta:
+                    vmNicMeta['domain'] = vmNicMeta['l2domain']
+                    vmNicMeta['domainType'] = 'L2'
+                    vmNicMeta.pop('l2domain', None)
+                else:
+                    vmNicMeta['domainType'] = 'L3'
+
                 vmMetadata.append(vmNicMeta)
 
     return vmMetadata
