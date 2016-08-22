@@ -10,7 +10,7 @@ from pyVmomi import vmodl
 #import tools.pchelper as pchelper
 #import tools.tasks as tasks
 
-CSV_FIELDS = ['uuid', 'name', 'nic', 'user', 'enterprise', 'domain', 'zone', 'network', 'networktype', 'ip','policy-group', 'redirection-target']
+CSV_FIELDS = ['uuid', 'name', 'nic', 'user', 'enterprise', 'domainType', 'domain', 'zone', 'network', 'networktype', 'ip','policy-group', 'redirection-target']
 
 import config as config
 
@@ -76,7 +76,14 @@ def loadNuageFromVSC(csvFile):
 
             interface = {}
             if row['nic'] and row['nic'] != '':
-                interface = { 'domain' : row['domain'],
+                if row['domainType'] = 'L2':
+                    interface = { 'l2domain' : row['domain'],
+                              'networktype' : row['networktype'],
+                              'policy-group' : row['policy-group'],
+                              'redirection-target' : row['redirection-target']
+                              }
+                else:
+                    interface = { 'domain' : row['domain'],
                               'zone' : row['zone'],
                               'network' : row['network'],
                               'networktype' : row['networktype'],
@@ -98,7 +105,14 @@ def loadNuageFromVSC(csvFile):
             #If NIC defined
             interface = {}
             if row['nic'] and row['nic'] != '':
-                interface = { 'domain' : row['domain'],
+                if row['domainType'] = 'L2':
+                    interface = { 'l2domain' : row['domain'],
+                              'networktype' : row['networktype'],
+                              'policy-group' : row['policy-group'],
+                              'redirection-target' : row['redirection-target']
+                              }
+                else:
+                    interface = { 'domain' : row['domain'],
                               'zone' : row['zone'],
                               'network' : row['network'],
                               'networktype' : row['networktype'],
