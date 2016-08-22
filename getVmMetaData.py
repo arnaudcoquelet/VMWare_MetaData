@@ -9,7 +9,7 @@ from pyVmomi import vmodl
 #import tools.cli as cli
 #import tools.pchelper as pchelper
 
-CSV_FIELDS = ['uuid', 'name', 'nic', 'user', 'enterprise', 'domain', 'zone', 'network', 'networktype', 'ip','policy-group', 'redirection-target']
+CSV_FIELDS = ['uuid', 'name', 'nic', 'user', 'enterprise', 'domainType', 'domain', 'zone', 'network', 'networktype', 'ip','policy-group', 'redirection-target']
 vm_properties = ["name", "config.uuid", "config.extraConfig"]
 
 
