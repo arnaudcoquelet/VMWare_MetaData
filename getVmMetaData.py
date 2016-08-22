@@ -193,7 +193,7 @@ def main():
                                                     port=int(config.vCenter['port']))
 
         except Exception as exc:
-            if '[SSL: CERTIFICATE_VERIFY_FAILED]' in exc.msg:
+            if '[SSL: CERTIFICATE_VERIFY_FAILED]' in '%s' % (exc):
                 try:
                     import ssl
                     default_context = ssl._create_default_https_context
