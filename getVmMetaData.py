@@ -71,7 +71,7 @@ def getNuageMetaData(extraConfig):
 
 def write_to_csv(vms=None, outputfile='vm_metadata.csv'):
     if vms and len(vms)>0:
-        csvWriter = csv.DictWriter(open(outputfile, mode='w'), CSV_FIELDS)
+        csvWriter = csv.DictWriter(open(outputfile, mode='w'), CSV_FIELDS, extrasaction="ignore")
         #Write CSV headers
         csvWriter.writeheader()
 
