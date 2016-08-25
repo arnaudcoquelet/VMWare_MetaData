@@ -1,4 +1,6 @@
 import csv
+import sys
+import getopt
 
 import atexit
 
@@ -6,10 +8,39 @@ from pyVim import connect
 from pyVmomi import vim
 from pyVmomi import vmodl
 
-#import tools.cli as cli
-#import tools.pchelper as pchelper
+import logging
 
-CSV_FIELDS = ['uuid', 'name', 'nic', 'user', 'enterprise', 'domainType', 'domain', 'zone', 'network', 'networktype', 'ip','policy-group', 'redirection-target']
+
+#######################################################
+#                    LOGGER                           #
+logger = logging.getLogger('getVmMetaData')
+logger.setLevel(logging.INFO)
+
+# create file handler which logs even debug messages
+fh = logging.FileHandler('debug.log')
+fh.setLevel(logging.DEBUG)
+
+# create console handler with a higher log level
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+
+# create formatter and add it to the handlers
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+fh.setFormatter(formatter)
+formatter = logging.Formatter('%(asctime)s - %(message)s')
+ch.setFormatter(formatter)
+
+# add the handlers to the logger
+logger.addHandler(fh)
+logger.addHandler(ch)
+#
+#######################################################
+
+
+
+
+
+CSV_FIELDS = ['uuid', 'name', 'nic', 'user', 'enterprise', 'domainType', 'domain', 'zone', 'network', 'networktype', 'ip', 'vport', 'policy-group', 'redirection-target']
 vm_properties = ["name", "config.uuid", "config.extraConfig"]
 
 
@@ -183,10 +214,13 @@ def collect_properties(service_instance, view_ref, obj_type, path_set=None, incl
     return data
 
 
-def main():
+def main(vmNameFilter, enterpriseFilter, domainFilter, zoneFilter, subnetFilter):
     if config and config.vCenter:
         service_instance = None
         try:
+            logger.info('Connecting to vCenter %s' % (config.vCenter['host']) )
+            logger.debug('Connection settings: %s' % (config.vCenter) )
+
             service_instance = connect.SmartConnect(host=config.vCenter['host'],
                                                     user=config.vCenter['user'],
                                                     pwd=config.vCenter['password'],
@@ -194,6 +228,7 @@ def main():
 
         except Exception as exc:
             if '[SSL: CERTIFICATE_VERIFY_FAILED]' in '%s' % (exc):
+                logger.debug('SSL Connection to vCenter required')
                 try:
                     import ssl
                     default_context = ssl._create_default_https_context
@@ -204,42 +239,134 @@ def main():
                                                         port=int(config.vCenter['port']))
                     ssl._create_default_https_context = default_context
                 except Exception as exc1:
+                    logger.debug('Error while connecting to vCenter, %s' % (exc1))
                     raise Exception(exc1)
             else:
+                logger.debug('Error while connecting to vCenter, %s' % (exc1))
                 raise Exception(exc)
 
 
         try:
+            logger.debug('Connected to vCenter: %s' % (config.vCenter['host']) )
+
             atexit.register(connect.Disconnect, service_instance)
 
+            logger.debug('Creating view on VirtualMachine objects')
             root_folder = service_instance.content.rootFolder
             view = get_container_view(service_instance,
                                                obj_type=[vim.VirtualMachine])
+
+            logger.info('Collecting VirtualMachine(s) raw information')
             vm_data = collect_properties(service_instance, view_ref=view,
                                                   obj_type=vim.VirtualMachine,
                                                   path_set=vm_properties,
                                                   include_mors=True)
+            logger.info('%s VirtualMachine(s) found' % (len(vm_data)))
+
+
             vmsNuageMetaData = {}
             for vm in vm_data:
                 vmName = vm["name"]
                 vmUUID = vm["config.uuid"]
                 vmMetadata = getNuageMetaData(vm["config.extraConfig"])
+                logger.debug('Parsing VM raw info: name=%s uuid=%s metadata=%s' % (vmName, vmUUID, vmMetadata) )
 
-                # if args.nuage:
-                #     if vmMetadata and len(vmMetadata) >0:
-                #         vmsNuageMetaData[vmUUID] = (vmUUID, vmName, vmMetadata)
+                #Check VM name against filter
+                if not (( vmNameFilter.strip() == '') or (vmNameFilter.lower() in vmName.lower() )):
+                    logger.debug('Discarding VM: name=%s uuid=%s metadata=%s' % (vmName, vmUUID, vmMetadata) )
+                    continue
 
-                # else:
-                #     vmsNuageMetaData[vmUUID] = (vmUUID, vmName, vmMetadata)
-                
+                logger.debug('Adding VM: name=%s uuid=%s metadata=%s' % (vmName, vmUUID, vmMetadata) )
                 vmsNuageMetaData[vmUUID] = (vmUUID, vmName, vmMetadata)
 
+
+            logger.info('Num. of VM collected: %s' % (len(vmsNuageMetaData)) )
+            logger.debug('%s' % (vmsNuageMetaData) )
+
+            logger.info('Generating CSV file')
             write_to_csv(vmsNuageMetaData)
 
         except Exception as exc:
             print("Exception:\n %s" % (exc) )
             pass
 
+
+# def print_info(*objs):
+#     print(*objs, file=sys.stderr)
+
+
+def printHelp(argvs):
+    helpString = "\n"
+    helpString += " SYNOPSIS\n"
+    helpString += "    %s filter [OPTIONS]\n" % argvs[0]
+    helpString += "\n"
+    helpString += " DESCRIPTION\n"
+    helpString += "    This script will search for vPorts with name or description matching the filter.\n"
+    helpString += "\n"
+    helpString += " OPTIONS\n"
+    helpString += "    -h, --help         Print this help\n"
+    helpString += "    -v, --version      Print this version\n"
+    helpString += "    -o, --output       Output the result to a csv file\n"
+    helpString += "    -e, --enterprise   Filter on Enterprise name\n"
+    helpString += "    -d, --domain       Filter on Domain name\n"
+    helpString += "    -z, --zone         Filter on Zone name\n"
+    helpString += "    -s, --sunet        Filter on Subnet name\n"
+    helpString += "\n"
+
+    return helpString
+
+
+
 # Start program
 if __name__ == "__main__":
-    main()
+
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "vhno:e:d:z:s:", ["help","debug","name=", "enterprise=","domain=", "zone=", "subnet="])
+    except getopt.GetoptError:
+        #print_info(printHelp(argvs))
+        sys.exit(2)
+
+
+    vmNameFilter = ''
+    enterpriseFilter = ''
+    domainFilter = ''
+    zoneFilter = ''
+    subnetFilter = ''
+
+
+    for opt, arg in opts:
+        
+        if opt in ("-h", "--help"):
+            print_info(printHelp(argvs))
+            sys.exit()
+
+        elif opt in ("-n", "--name"):
+            vmNameFilter = arg
+
+        elif opt in ("-v", "--debug"):
+            print "Set Logging level to DEBUG"
+            logger.setLevel(logging.DEBUG)
+
+        elif opt in ("-e"):
+            enterprisefilter = "%s" % (arg)
+        elif opt in ("-d"):
+            domainfilter = "%s" % (arg)
+        elif opt in ("-z"):
+            zonefilter = "%s" % (arg)
+        elif opt in ("-s"):
+            subnetfilter = "%s" % (arg)
+
+        elif opt in ("--enterprise"):
+            enterprisefilter = "%s" % (arg)
+        elif opt in ("--domain"):
+            domainfilter = "%s" % (arg)
+        elif opt in ("--zone"):
+            zonefilter = "%s" % (arg)
+
+    logger.debug( "VM name filter: %s" % vmNameFilter )
+    logger.debug( "Enterprise Filter: %s" % enterpriseFilter )
+    logger.debug( "Domain Filter: %s" % domainFilter )
+    logger.debug( "Zone Filter: %s" % zoneFilter )
+    logger.debug( "Subnet Filter: %s" % subnetFilter )
+
+    main(vmNameFilter, enterpriseFilter, domainFilter, zoneFilter, subnetFilter)
