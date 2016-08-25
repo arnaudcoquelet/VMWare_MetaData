@@ -6,11 +6,34 @@ from pyVim import connect
 from pyVmomi import vim
 from pyVmomi import vmodl
 
-#import tools.cli as cli
-#import tools.pchelper as pchelper
-#import tools.tasks as tasks
+import logging
 
-CSV_FIELDS = ['uuid', 'name', 'nic', 'user', 'enterprise', 'domainType', 'domain', 'zone', 'network', 'networktype', 'ip','policy-group', 'redirection-target']
+#######################################################
+#                    LOGGER                           #
+logger = logging.getLogger('setVmMetaData')
+logger.setLevel(logging.INFO)
+
+# create file handler which logs even debug messages
+fh = logging.FileHandler('debug.log')
+fh.setLevel(logging.DEBUG)
+
+# create console handler with a higher log level
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+
+# create formatter and add it to the handlers
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+fh.setFormatter(formatter)
+formatter = logging.Formatter('%(asctime)s - %(message)s')
+ch.setFormatter(formatter)
+
+# add the handlers to the logger
+logger.addHandler(fh)
+logger.addHandler(ch)
+#
+#######################################################
+
+CSV_FIELDS = ['uuid', 'name', 'nic', 'user', 'enterprise', 'domainType', 'domain', 'zone', 'network', 'networktype', 'ip', 'vport', 'policy-group', 'redirection-target']
 
 import config as config
 
@@ -83,7 +106,8 @@ def loadNuageFromVSC(csvFile):
                               'domain' : '',
                               'networktype' : row['networktype'],
                               'policy-group' : row['policy-group'],
-                              'redirection-target' : row['redirection-target']
+                              'redirection-target' : row['redirection-target'],
+                              'vport' : row['vport']
                               }
                 else:
                     interface = { 'domain' : row['domain'],
@@ -92,7 +116,8 @@ def loadNuageFromVSC(csvFile):
                               'network' : row['network'],
                               'networktype' : row['networktype'],
                               'policy-group' : row['policy-group'],
-                              'redirection-target' : row['redirection-target']
+                              'redirection-target' : row['redirection-target'],
+                              'vport' : row['vport']
                               }
 
                 vm['interfaces'][row['nic']] = interface
@@ -116,7 +141,8 @@ def loadNuageFromVSC(csvFile):
                               'domain' : '',
                               'networktype' : row['networktype'],
                               'policy-group' : row['policy-group'],
-                              'redirection-target' : row['redirection-target']
+                              'redirection-target' : row['redirection-target'],
+                              'vport' : row['vport']
                               }
                 else:
                     interface = { 'domain' : row['domain'],
@@ -125,7 +151,8 @@ def loadNuageFromVSC(csvFile):
                               'network' : row['network'],
                               'networktype' : row['networktype'],
                               'policy-group' : row['policy-group'],
-                              'redirection-target' : row['redirection-target']
+                              'redirection-target' : row['redirection-target'],
+                              'vport' : row['vport']
                               }
 
                 vm['interfaces'][row['nic']] = interface
@@ -185,6 +212,9 @@ def main():
     if config and config.vCenter:
         service_instance = None
         try:
+            logger.info('Connecting to vCenter %s' % (config.vCenter['host']) )
+            logger.debug('Connection settings: %s' % (config.vCenter) )
+
             service_instance = connect.SmartConnect(host=config.vCenter['host'],
                                                     user=config.vCenter['user'],
                                                     pwd=config.vCenter['password'],
@@ -192,6 +222,7 @@ def main():
 
         except Exception as exc:
             if '[SSL: CERTIFICATE_VERIFY_FAILED]' in str(exc):
+                logger.debug('SSL Connection to vCenter required')
                 try:
                     import ssl
                     default_context = ssl._create_default_https_context
@@ -209,6 +240,8 @@ def main():
 
 
         try:
+            logger.debug('Connected to vCenter: %s' % (config.vCenter['host']) )
+
             atexit.register(connect.Disconnect, service_instance)
             taskList = []
 
@@ -216,8 +249,10 @@ def main():
             for uuid, vmNuageMetaData in VMs.iteritems():
                 name = vmNuageMetaData['name']
 
+                logger.debug("Searching VM %s (%s)" % (name, uuid))
                 vm = service_instance.content.searchIndex.FindByUuid(None, uuid, True)
                 if not vm:
+                    logger.debug("VM %s (%s) not found" % (name, uuid))
                     print "VM %s (%s) not found" % (name, uuid)
 
                 #VM Spec for Update
@@ -225,24 +260,29 @@ def main():
                 # extraCfg = vm.config.extraConfig
                 extraCfg = spec.extraConfig
 
+                logger.debug("Modify metadata on VM %s (%s)" % (name, uuid))
+                logger.debug("set nuage.user to '%s'" % vmNuageMetaData['user'])
                 setOption(extraCfg, 'nuage.user', vmNuageMetaData['user'])
+
+                logger.debug("set nuage.enterprise to '%s'" % vmNuageMetaData['enterprise'])
                 setOption(extraCfg, 'nuage.enterprise', vmNuageMetaData['enterprise'])
 
                 #Add interface metadata
                 for interface, interfacedata in vmNuageMetaData['interfaces'].iteritems():
                     if interface is None or interfacedata is None or len(interfacedata.keys()) == 0:
-                        print 'No interface to add'
+                        logger.debug('No interface to add to the VM metadata')
 
                     for interfacedataK, interfacedataV in interfacedata.iteritems():
+                        logger.debug("set nuage.%s.%s to '%s'" % (interface, interfacedataK,interfacedataV) )
                         setOption(extraCfg, 'nuage.%s.%s' % (interface, interfacedataK), interfacedataV)
 
-                print "Updating VM %s (%s) configuration" % (name, uuid)
-                #task = vm.ReconfigVM_Task(vm.config)
+                logger.info("Updating VM %s (%s) configuration" % (name, uuid) )
+                logger.debug("Reconfiguring VM %s (%s)" % (name, uuid) )
                 task = vm.ReconfigVM_Task(spec)
                 taskList.append(task)
 
             wait_for_tasks(service_instance, taskList)
-            print "VM(s) update completed"
+            logger.info("VM(s) update completed")
 
         except Exception as exc:
             top = traceback.extract_stack()[-1]
